@@ -1,8 +1,8 @@
 =========================
-foglamp-south-csvplayback
+fledge-south-csvplayback
 =========================
 
-FLedge South Plugin for CSV playback using either async or poll mode.
+Fledge South Plugin for CSV playback using either async or poll mode.
 
 Overview
 =====================

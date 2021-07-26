@@ -6,7 +6,7 @@ import numpy as np
 
 _FLEDGE_ROOT = os.getenv("FLEDGE_ROOT", default='/usr/local/fledge')
 if not os.path.exists(_FLEDGE_ROOT):
-    print('Make sure FOGLAMP_ROOT exist')
+    print('Make sure FLEDGE_ROOT exist')
     sys.exit(1)
 
 _FLEDGE_DATA = os.path.expanduser(_FLEDGE_ROOT + '/data')
