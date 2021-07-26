@@ -1,0 +1,159 @@
+.. |config1| image:: images/csvplayback.jpg
+
+
+CSV Playback
+============
+
+The plugin plays a csv file inside FLEDGE_ROOT/data. It converts the columns of csv file into readings which are datapoints of an output asset.
+The plugin plays readings at some configurable rate.
+
+We can also convert the columns of csv file into some other data type. For example from float to integer. The converted data will be part of reading not the CSV file.
+
+The plugin has the ability to play the readings in either burst or continuous mode. In burst mode all readings are ingested into database at once and there is no adjustment of timestamp of a single reading. Whereas in continuous mode readings are ingested one by one and the timestamp of each reading is adjusted according to sampling rate. (For example if sampling rate is 8000 then the user_ts of every reading differs by 125 micro seconds.)
+
+We can also copy the timestamp if present in the CSV file. This time stamp becomes the user_ts of a reading.
+
+The plugin can also play the file in a loop which means it can start again if end of the file has reached.
+
+
+|config1|
+
+  - **'assetName': type: string default: 'vibration'**:
+                The output asset that contains the readings.
+
+  - **'csvFilename': type: string default: ''**:
+                The CSV file name (with .csv extension) to play. It should be present in FLEDGE_ROOT/data.
+
+  - **'useColumns': type: string default: ''**:
+                Format **column1:type,column2:type**
+
+                The data types supported are:
+                int, float, str, datetime, bool
+
+                We can perform three tasks with this config parameter.
+
+                1. The column name will get renamed in the reading if different name is used other than present in CSV file.
+                2. We can select a subset of columns from total columns.
+                3. We can convert the data type of each column.
+
+                Example if the file is like the following
+
+                    id,value,status
+
+                    1,2.5,'OK'
+
+                    2,2.7,'OK'
+
+                Then we can give
+
+                1. id:int,temperature:float,status:str
+
+                The column value will be renamed to temperature.
+
+                2. id:int,value:float
+
+                Only two columns will be selected here.
+
+                3. id:int,temperature:int,status:str
+
+                The data type will be converted to integer. Also column will be renamed.
+
+
+  - **'ingestMode': type: enumeration default: 'burst'**:
+                Burst or continuous mode for ingestion.
+
+  - **'sampleRate': type: integer default: '8000'**:
+                No of readings per second to ingest.
+
+  - **'burstInterval': type: integer default: '1000'**:
+                Used for burst mode. Time interval between consecutive bursts in milliseconds.
+
+  - **'timestampStyle': type: enumeration default: 'current time'**:
+                Controls how to give timestamps to reading. Works in four ways:
+
+                1. current time: The timestamp in the readings is whatever the local time in the machine.
+                2. copy csv value: Copy the timestamp present in the CSV file.
+                3. move csv value: Used when we do not want to include timestamps from files in actual readings.
+                4. use csv sample delta: Pick the delta between two readings in the file and construct the timestamp of reading using this delta. Assuming the delta remains constant through out the file.)
+
+  - **'timestampCol': type: string default: ''**:
+                The timestamp column to pick from the file. Used only when timestampStyle is not 'current time'.
+
+  - **'timestampFormat': type: string default: '%Y-%m-%d %H:%M:%S.%f%z'**:
+                The timestamp format that will be used to parse the time stamps present in the file.  Used only when timestampStyle is not 'current time'.
+
+
+  - **'ignoreNaN': type: enumeration default: ignore**:
+                Pandas takes the white spaces and missing values as NaN's. These NaN's cause problem while ingesting into database.
+                It is left to the user to ensure there are no missing values in CSV file. However if the option selected is report. Then plugin will check for NaN's and report error to user. This can serve as a way to check the CSV file for missing values. However the user has to take action on what to do with NaN values. The default action is to ignore them.
+                When error is reported the user must delete the south service and try again with clean CSV file.
+
+  - **'repeatLoop': type: boolean default: false**:
+                Read CSV in a loop i.e. on reaching End Of File, again go back to beginning of the file.
+
+
+Execution
+---------
+
+Assuming you have a csv file named vibration.csv inside FLEDGE_ROOT/data. Use the following command to use the plugin.
+
+    .. code-block:: console
+
+        curl -sX POST http://localhost:8081/fledge/service -d '{"name":"My_south","type":"south","plugin":"csvplayback","enabled":false,"config":{"assetName":{"value":"My_csv_asset"},  "csvFilename":{"value":"vibration.csv"}, "repeatLoop":{"value":"true"}, "ingestMode":{"value":"burst"}}}' |jq
+
+
+Poll Vs Async
+-------------
+
+The plugin also works in async mode. Though the default mode is poll.
+The async mode is faster but suffers with memory growth when sample rate is too high for the machine configuration
+
+Use the following sed operation for async and start the plugin again. (for poll the command is mentioned below async)
+
+.. code-block:: console
+
+    plugin_path=$FLEDGE_ROOT/python/fledge/plugins/south/csvplayback/csvplayback.py
+    value='s/POLL_MODE=True/POLL_MODE=False/'
+    sudo sed -i $value $plugin_path
+
+    # for poll the value variable will be
+    # value='s/POLL_MODE=False/POLL_MODE=True/'
+
+
+Behaviour Under various mode
+----------------------------
+
+The behaviour of plugin under various modes.
+
+.. list-table::
+   **Behaviour of CSV playback plugin**
+   :widths: 15 15 70
+   :header-rows: 1
+
+   * - Plugin mode
+     - Ingest mode
+     - Behaviour
+   * - poll
+     - burst
+     - No memory growth. Resembles the way sensors give data in real life. However the timestamps of readings won't differ by a fixed delta.
+   * - poll
+     - continuous
+     - No memory growth. Readings differ by a constant delta. However it is slow in performance.
+   * - async
+     - continuous
+     - Similar to poll continuous but faster. However memory growth is observed over time.
+   * - async
+     - burst
+     - Similar to poll burst. Not used generally.
+
+
+
+For using poll continuous increase the readingPerSec category to the sample rate.
+
+.. code-block:: console
+
+      sampling_rate=8000
+      curl -sX PUT http://localhost:8081/fledge/category/My_southAdvanced -d '{"bufferThreshold":"'"$sampling_rate"'","readingsPerSec":"'"$sampling_rate"'"}' |jq
+
+It is advisable to increase the buffer threshold at least half the sample rate for good performance. (As done in command)
+

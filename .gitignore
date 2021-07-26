@@ -1,0 +1,18 @@
+# vi
+*.swp
+
+# MacOS Finder
+.DS_Store
+._*
+
+# IDE
+*.idea
+
+# Compiled Object files
+*.pyc
+
+# Test
+.pytest_cache
+
+# Jupyter notebooks log
+*.ipynb_checkpoints
