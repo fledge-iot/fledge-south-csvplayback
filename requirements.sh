@@ -25,11 +25,11 @@ echo "Platform is ${os_name}, Version: ${os_version}"
 case $os_name in
 
   *"Red Hat"*)
-    source scl_source enable rh-python36
+    echo "No installation of atlas base dev required."
     ;;
 
   *"CentOS"*)
-    source scl_source enable rh-python36
+    echo "No installation of atlas base dev required."
     ;;
 
   *)

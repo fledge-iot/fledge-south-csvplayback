@@ -11,13 +11,12 @@ if [ ${ID} != "mendel" ]; then
  case $os_name in
 
   *"Red Hat"*)
-    echo "No installation of atlas base dev required."
+    source scl_source enable rh-python36
     ;;
 
   *"CentOS"*)
-    echo "No installation of atlas base dev required."
+    source scl_source enable rh-python36
     ;;
-
   esac
 
   python3 -m pip install pandas==1.0.1
