@@ -11,11 +11,11 @@ if [ ${ID} != "mendel" ]; then
  case $os_name in
 
   *"Red Hat"*)
-    source scl_source enable rh-python36
+    echo "No installation of atlas base dev required."
     ;;
 
   *"CentOS"*)
-    source scl_source enable rh-python36
+    echo "No installation of atlas base dev required."
     ;;
 
   esac
