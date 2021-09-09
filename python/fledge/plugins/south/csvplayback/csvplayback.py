@@ -13,6 +13,7 @@ from threading import Event
 from threading import Thread, Condition
 import datetime
 import time
+import glob
 
 import pandas as pd
 import numpy as np
@@ -62,12 +63,38 @@ _DEFAULT_CONFIG = {
         'displayName': 'Asset name',
         'order': '1'
     },
+    'csvDirName': {
+        'description': 'The directory where CSV file exists. Default is '
+                       'FLEDGE_DATA or FOGLAMP_ROOT/data',
+        'type': 'string',
+        'default': 'FLEDGE_DATA',
+        'displayName': 'CSV Directory Name',
+        'order': '2'
+    },
     'csvFilename': {
-        'description': 'CSV file name with extension found in FLEDGE_ROOT/data',
+        'description': 'CSV file name to search inside directory. Not necessary a full'
+                       'file name.',
         'type': 'string',
         'default': '',
-        'displayName': 'CSV file name',
-        'order': '2'
+        'displayName': 'CSV file Pattern',
+        'order': '3'
+    },
+    'headerMethod': {
+        'description': 'Method for processing the header.',
+        'type': 'enumeration',
+        'default': 'change_or_rename_values',
+        'options': ['skip_rows', 'combine_rows', 'change_or_rename_values'],
+        'displayName': 'Header Processing Method',
+        'order': '4'
+    },
+    'noOfRows': {
+        'description': 'No. of rows to skip or combine to single value.',
+        'type': 'integer',
+        'default': '1',
+        'displayName': 'No of rows to skip/merge.',
+        'validity': "headerMethod == \"skip_rows\" || headerMethod == \"combine_rows\"",
+        'minimum': '1',
+        'order': '5'
     },
     'useColumns': {
         'description': 'Comma separated list of column names [:types] for selection / name / type override; '
@@ -75,7 +102,14 @@ _DEFAULT_CONFIG = {
         'type': 'string',
         'default': '',
         'displayName': 'Column names / overrides',
-        'order': '3'
+        'order': '6'
+    },
+    'variableCols': {
+        'description': 'Are variable number of values present in every row?',
+        'type': 'boolean',
+        'default': 'true',
+        'displayName': 'Whether Variable Rows Present',
+        'order': '7'
     },
     'ingestMode': {
         'description': 'Mode of data ingest - burst/continuous',
@@ -83,7 +117,7 @@ _DEFAULT_CONFIG = {
         'default': 'burst',
         'options': ['continuous', 'burst'],
         'displayName': 'Ingest mode',
-        'order': '4'
+        'order': '8'
     },
     'sampleRate': {
         'description': 'No. of readings per sec.',
@@ -92,7 +126,7 @@ _DEFAULT_CONFIG = {
         'displayName': 'Sample rate',
         'minimum': '1',
         'maximum': '1000000',
-        'order': '5'
+        'order': '9'
     },
     'burstInterval': {
         'description': 'Time interval between consecutive bursts in milliseconds; mandatory for "burst" mode',
@@ -101,7 +135,7 @@ _DEFAULT_CONFIG = {
         'validity': "ingestMode == \"burst\"",
         'displayName': 'Burst interval (ms)',
         'minimum': '1',
-        'order': '6'
+        'order': '10'
     },
     'timestampStyle': {
         'description': 'Select "continuous" mode asset timestamp processing style.',
@@ -109,7 +143,7 @@ _DEFAULT_CONFIG = {
         'default': 'current time',
         'options': ['current time', 'copy csv value', 'move csv value', 'use csv sample delta'],
         'displayName': 'Timestamp processing mode',
-        'order': '7'
+        'order': '11'
     },
     'timestampCol': {
         'description': 'Timestamp header column, mandatory for "move/copy csv value" or'
@@ -119,7 +153,7 @@ _DEFAULT_CONFIG = {
         'validity': "timestampStyle == \"copy csv value\" || timestampStyle == \"move csv value\" ||  "
                     "timestampStyle == \"use csv sample delta\"",
         'displayName': 'Timestamp column name',
-        'order': '8'
+        'order': '12'
     },
     'timestampFormat': {
         'description': 'Timestamp format in File; mandatory when timestamp column is used',
@@ -128,7 +162,7 @@ _DEFAULT_CONFIG = {
         'validity': "timestampStyle == \"copy csv value\" || timestampStyle == \"move csv value\" ||  "
                     "timestampStyle == \"use csv sample delta\"",
         'displayName': 'Timestamp format',
-        'order': '9'
+        'order': '13'
     },
     'ignoreNaN': {
         'description': 'Ignore the NaN values or report error. NaN values occur due to whitespaces'
@@ -138,15 +172,25 @@ _DEFAULT_CONFIG = {
         'default': 'ignore',
         'options': ['ignore', 'report'],
         'displayName': 'Ignore or report for NaN',
-        'order': '10'
+        'order': '14'
     },
-    'repeatLoop': {
-        'description': 'Read CSV in a loop i.e. on reaching EOF, again go back to beginning of the file',
-        'type': 'boolean',
-        'default': 'false',
-        'displayName': 'Read file in a loop',
-        'order': '11'
+    'postProcessMethod': {
+        'description': 'Action to perform when file being played gets finished.',
+        'type': 'enumeration',
+        'default': ['continue_playing', 'delete', 'rename'],
+        'displayName': 'Post Process Method',
+        'order': '15'
     },
+    'suffixName': {
+        'description': 'Suffix Name to append to file if Post Process Method is '
+                       'rename',
+        'type': 'string',
+        'default': '.tmp',
+        'displayName': 'Suffix Name',
+        'validity': "postProcessMethod == \"rename\"",
+        'order': '16'
+    },
+
 }
 
 
@@ -185,13 +229,25 @@ def plugin_init(config):
 
     try:
         errors = False
-        csv_file_name = "{}/{}".format(_FLEDGE_DATA, handle['csvFilename']['value'])
-        if not handle['csvFilename']['value']:
-            _LOGGER.error("csv filename cannot be empty")
-            errors = True
-        if not os.path.isfile(csv_file_name):
-            _LOGGER.error('csv filename "{}" not found'.format(csv_file_name))
-            errors = True
+        if handle['csvDirName']['value'] == "FLEDGE_DATA":
+            csv_dir = _FLEDGE_DATA
+        else:
+            csv_dir = _FLEDGE_DATA
+        if not os.path.exists(csv_dir):
+            raise FileNotFoundError
+
+        csv_file_name_pattern = handle['csvFilename']['value']
+        full_file_list = csv_dir + '/' + '*'
+        file_list = sorted(glob.glob(full_file_list))
+        if not file_list:
+            raise FileNotFoundError
+        filtered_files = [f for f in file_list if os.path.split(f)[1].find(csv_file_name_pattern) != -1]
+        if not filtered_files:
+            raise FileNotFoundError
+
+        # Taking the file name as the first file found.
+        handle['csvFileName']['value'] = filtered_files[0]
+
         if int(handle['sampleRate']['value']) < 1 or int(handle['sampleRate']['value']) > 1000000:
             _LOGGER.error("sampleRate should be in range 1-1000000")
             errors = True
@@ -217,10 +273,17 @@ def plugin_init(config):
                 burst_interval = int(handle['burstInterval']['value'])
                 # chunk up a "burst's" worth of samples
                 period = round(burst_interval / 1000.0, len(str(burst_interval)) + 1)
-                recs = int(period * int(handle['sampleRate']['value']))
+                if handle['variableCols']['value'] == 'false':
+                    recs = int(period * int(handle['sampleRate']['value']))
+                else:
+                    recs = 1
             else:
                 # chunk up a second's worth of samples
-                recs = int(handle['sampleRate']['value'])
+                if handle['variableCols']['value'] == 'false':
+                    recs = int(handle['sampleRate']['value'])
+                else:
+                    recs = 1
+
                 period = round(1.0 / recs, len(str(recs)) + 1)
                 _LOGGER.info("recs is {} and period is {}".format(recs, period))
         except ZeroDivisionError:
@@ -340,11 +403,21 @@ if POLL_MODE:
 
         readings = next(reader.file_iter, None)
 
-        if (readings is None) and (handle['repeatLoop']['value'] == 'true'):
-            # reload csv file
-            _LOGGER.info('End of file reached. Replaying it')
-            reader.read_csv_file()
-            readings = next(reader.file_iter, None)
+        if readings is None:
+
+            _LOGGER.info('End of file reached.')
+            if handle['postProcessMethod']['value'] == 'continue_playing':
+                # reload csv file
+                _LOGGER.info('Replaying it')
+                reader.read_csv_file()
+                readings = next(reader.file_iter, None)
+            elif handle['postProcessMethod']['value'] == 'delete':
+                _LOGGER.info('Deleting the csv file it')
+                os.remove(handle['csvFileName']['value'])
+            elif handle['postProcessMethod']['value'] == 'rename':
+                _LOGGER.info('Renaming the csv file with suffix {}'.format(handle['suffixName']['value']))
+                rename_name = handle['csvFileName']['value'] + handle['suffixName']['value']
+                os.rename(handle['csvFileName']['value'], rename_name)
 
         # read and return subsequent asset formatted values from csv file
         return readings
@@ -370,7 +443,7 @@ class CSVReader:
         Returns: None
         """
 
-        csv_path = '{}/{}'.format(_FLEDGE_DATA, self.handle['csvFilename']['value'])
+        csv_path = self.handle['csvFilename']['value']
         if os.path.isfile(csv_path) and os.path.getsize(csv_path) == 0:
             _LOGGER.error(f"CSV file {csv_path} has zero length")
             raise EOFError
@@ -425,11 +498,23 @@ class CSVReader:
 
             # only use the given non-empty fields; change names
             # ASSUME: the list has an entry per column in the file (empty or non-empty)
-            self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize,
-                                  header=0,
-                                  names=names,
-                                  dtype=dtype,
-                                  usecols=[n for n in names if n != ''])
+            if self.handle['headerMethod']['value'] == 'skip_rows':
+                rows_to_skip = int(self.handle['noOfRows']['value'])
+                self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize,
+                                      header=0,
+                                      names=names,
+                                      dtype=dtype,
+                                      usecols=[n for n in names if n != ''],
+                                      skiprows=rows_to_skip)
+            elif self.handle['headerMethod']['value'] == 'combine_rows':
+                # TODO not clear at the moment how to process it.
+                pass
+            else:
+                self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize,
+                                      header=0,
+                                      names=names,
+                                      dtype=dtype,
+                                      usecols=[n for n in names if n != ''])
 
         self.file_iter = self.file_to_readings()
 
@@ -457,8 +542,22 @@ class CSVReader:
             yield results individually or in a batch
         """
         timestamp = []
-        if self.handle['ignoreNaN']['value'] != 'ignore':
-            self.validate_chunk(chunk)
+        if self.handle['variableCols']['value'] == 'false':
+
+            if self.handle['ignoreNaN']['value'] != 'ignore':
+                self.validate_chunk(chunk)
+        else:
+            # this row has some of the columns missing
+            is_nan = chunk.loc[0, :].isnull().values.all()  # check if all NaN values
+
+            # check if all blank values are there
+            is_blank = chunk.loc[0, :].astype(str).str.isspace().all()
+
+            if is_blank or is_nan:
+                # it is better to skip this row as it contains all columns nan or white spaces
+                return None
+            else:
+                chunk = chunk.dropna(axis=1)
 
         if (self.ts_col != '') and (self.ts_col in chunk) and \
                 (self.is_historic_ts or self.is_delta_ts):
@@ -561,12 +660,18 @@ class Producer(Thread):
                 chunk = next(reader.df)
                 readingsQueue.append(chunk)
             except StopIteration:
-                if self.handle['repeatLoop']['value'] == 'true':
+                if self.handle['postProcessMethod']['value'] == 'continue_playing':
                     # reload csv file
                     reader.read_csv_file()
                 else:
                     readingsQueue.append(_sentinel)
                     more = False
+
+                    if self.handle['postProcessMethod']['value'] == 'delete':
+                        os.remove(self.handle['csvFileName']['value'])
+                    elif self.handle['postProcessMethod']['value'] == 'rename':
+                        rename_name = self.handle['csvFileName']['value'] + self.handle['suffixName']['value']
+                        os.rename(self.handle['csvFileName']['value'], rename_name)
 
             # Notifying the consumer that data has been read.
             condition.notify()
