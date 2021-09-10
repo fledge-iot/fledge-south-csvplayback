@@ -510,9 +510,9 @@ class CSVReader:
         if self.handle['variableCols']['value'] == 'true':
             _LOGGER.debug("We have variable no of columns per row")
             if should_skip_row:
-                self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize, skiprows=rows_to_skip)
+                self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize, skiprows=rows_to_skip, header=None)
             else:
-                self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize)
+                self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize, header=None)
             self.process_variable_columns = True
         # Check the column processing method
 
