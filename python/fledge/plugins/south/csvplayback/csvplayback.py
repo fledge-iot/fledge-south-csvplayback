@@ -35,7 +35,7 @@ TIME_IT = True  # async timing information
 _FLEDGE_ROOT = os.getenv("FLEDGE_ROOT", default='/usr/local/fledge')
 _FLEDGE_DATA = os.path.expanduser(_FLEDGE_ROOT + '/data')
 
-_LOGGER = logger.setup(__name__, level=logging.INFO)
+_LOGGER = logger.setup(__name__, level=logging.DEBUG)
 
 plugin_mode = {True: 'poll', False: 'async'}[POLL_MODE]
 producer = None  # A Producer object to read data from csv file
@@ -82,34 +82,71 @@ _DEFAULT_CONFIG = {
     'headerMethod': {
         'description': 'Method for processing the header.',
         'type': 'enumeration',
-        'default': 'change_or_rename_values',
-        'options': ['skip_rows', 'combine_rows', 'change_or_rename_values'],
+        'default': 'normal',
+        'options': ['skip_rows', 'combine_rows', 'normal'],
         'displayName': 'Header Processing Method',
         'order': '4'
+    },
+    'dataPointForCombine': {
+        'description': 'If header method is combine rows then it is the datapoint name '
+                       'when the given number of rows will get combined.',
+        'type': 'string',
+        'default': 'metadata',
+        'displayName': 'Data Point For Combine',
+        'validity': "headerMethod == \"combine_rows\"",
+        'order': '5'
     },
     'noOfRows': {
         'description': 'No. of rows to skip or combine to single value.',
         'type': 'integer',
         'default': '1',
-        'displayName': 'No of rows to skip/merge.',
+        'displayName': 'No of rows to skip/combine.',
         'validity': "headerMethod == \"skip_rows\" || headerMethod == \"combine_rows\"",
         'minimum': '1',
-        'order': '5'
-    },
-    'useColumns': {
-        'description': 'Comma separated list of column names [:types] for selection / name / type override; '
-                       'if empty header row is used',
-        'type': 'string',
-        'default': '',
-        'displayName': 'Column names / overrides',
         'order': '6'
     },
     'variableCols': {
         'description': 'Are variable number of values present in every row?',
         'type': 'boolean',
-        'default': 'true',
-        'displayName': 'Whether Variable Rows Present',
+        'default': 'false',
+        'displayName': 'Dynamic Columns',
         'order': '7'
+    },
+    'columnMethod': {
+        'description': 'Method for getting the column names.',
+        'type': 'enumeration',
+        'default': 'explicit',
+        'options': ['explicit', 'pick_from_file'],
+        'validity': "variableCols == \"false\"",
+        'displayName': 'Header Processing Method',
+        'order': '8'
+    },
+    'autoGeneratePrefix': {
+        'description': 'The prefix for auto generation of columns if variable Columns is true.',
+        'type': 'string',
+        'default': 'column',
+        'displayName': 'Auto Generate Prefix',
+        'validity': "variableCols == \"true\"",
+        'order': '9'
+    },
+    'useColumns': {
+        'description': 'Comma separated list of column names [:types] for selection / name / type override; '
+                       'if column method is explicit.',
+        'type': 'string',
+        'default': '',
+        'displayName': 'Column names / overrides',
+        'validity': "columnMethod == \"explicit\"",
+        'order': '10'
+    },
+    'rowIndexForColumnNames': {
+        'description': 'The row index for picking column names if column method is '
+                       'pick_from_file',
+        'type': 'integer',
+        'default': '0',
+        'minimum': '0',
+        'displayName': 'Row Index For Column names',
+        'validity': "columnMethod == \"pick_from_file\"",
+        'order': '11'
     },
     'ingestMode': {
         'description': 'Mode of data ingest - burst/continuous',
@@ -117,7 +154,7 @@ _DEFAULT_CONFIG = {
         'default': 'burst',
         'options': ['continuous', 'burst'],
         'displayName': 'Ingest mode',
-        'order': '8'
+        'order': '12'
     },
     'sampleRate': {
         'description': 'No. of readings per sec.',
@@ -126,7 +163,7 @@ _DEFAULT_CONFIG = {
         'displayName': 'Sample rate',
         'minimum': '1',
         'maximum': '1000000',
-        'order': '9'
+        'order': '13'
     },
     'burstInterval': {
         'description': 'Time interval between consecutive bursts in milliseconds; mandatory for "burst" mode',
@@ -135,15 +172,16 @@ _DEFAULT_CONFIG = {
         'validity': "ingestMode == \"burst\"",
         'displayName': 'Burst interval (ms)',
         'minimum': '1',
-        'order': '10'
+        'order': '14'
     },
     'timestampStyle': {
         'description': 'Select "continuous" mode asset timestamp processing style.',
         'type': 'enumeration',
         'default': 'current time',
+        'validity': "variableCols == \"false\"",
         'options': ['current time', 'copy csv value', 'move csv value', 'use csv sample delta'],
         'displayName': 'Timestamp processing mode',
-        'order': '11'
+        'order': '15'
     },
     'timestampCol': {
         'description': 'Timestamp header column, mandatory for "move/copy csv value" or'
@@ -153,7 +191,7 @@ _DEFAULT_CONFIG = {
         'validity': "timestampStyle == \"copy csv value\" || timestampStyle == \"move csv value\" ||  "
                     "timestampStyle == \"use csv sample delta\"",
         'displayName': 'Timestamp column name',
-        'order': '12'
+        'order': '16'
     },
     'timestampFormat': {
         'description': 'Timestamp format in File; mandatory when timestamp column is used',
@@ -162,7 +200,7 @@ _DEFAULT_CONFIG = {
         'validity': "timestampStyle == \"copy csv value\" || timestampStyle == \"move csv value\" ||  "
                     "timestampStyle == \"use csv sample delta\"",
         'displayName': 'Timestamp format',
-        'order': '13'
+        'order': '17'
     },
     'ignoreNaN': {
         'description': 'Ignore the NaN values or report error. NaN values occur due to whitespaces'
@@ -172,14 +210,15 @@ _DEFAULT_CONFIG = {
         'default': 'ignore',
         'options': ['ignore', 'report'],
         'displayName': 'Ignore or report for NaN',
-        'order': '14'
+        'order': '18'
     },
     'postProcessMethod': {
         'description': 'Action to perform when file being played gets finished.',
         'type': 'enumeration',
-        'default': ['continue_playing', 'delete', 'rename'],
+        'options': ['continue_playing', 'delete', 'rename'],
+        'default': 'continue_playing',
         'displayName': 'Post Process Method',
-        'order': '15'
+        'order': '19'
     },
     'suffixName': {
         'description': 'Suffix Name to append to file if Post Process Method is '
@@ -188,7 +227,7 @@ _DEFAULT_CONFIG = {
         'default': '.tmp',
         'displayName': 'Suffix Name',
         'validity': "postProcessMethod == \"rename\"",
-        'order': '16'
+        'order': '20'
     },
 
 }
@@ -241,7 +280,8 @@ def plugin_init(config):
         file_list = sorted(glob.glob(full_file_list))
         if not file_list:
             raise FileNotFoundError
-        filtered_files = [f for f in file_list if os.path.split(f)[1].find(csv_file_name_pattern) != -1]
+        filtered_files = [f for f in file_list if os.path.split(f)[1].find(csv_file_name_pattern) != -1
+                          and os.path.split(f)[1].contains('.csv')]
         if not filtered_files:
             raise FileNotFoundError
 
@@ -436,6 +476,10 @@ class CSVReader:
         self.c = datetime.datetime.now(datetime.timezone.utc).astimezone()
         self.ts_diff = None
         self.read_csv_file()
+        self.process_variable_columns = False
+        self.process_metadata = False
+        self.meta_data_ingested = False
+        self.meta_data = {}
 
     def read_csv_file(self):
         """Creates iterators for retrieving chunks of lines from a csv file, and collections
@@ -452,69 +496,97 @@ class CSVReader:
         # a second's worth of data if we are in "continuous" mode, otherwise a "burst's" worth of data
         chunksize = int(self.handle['chunkSize']['value'])
 
-        # choices:
-        # have a header and use it (default)
+        _LOGGER.debug("The chunk size is {}".format(chunksize))
+        # Check the header processing method
 
-        # don't have a header, provide a full or partial list of "use columns", overriding names
+        should_skip_row = False
+        if self.handle['headerMethod']['value'] == 'skip_rows' or \
+                self.handle['headerMethod']['value'] == 'combine_rows':
+            should_skip_row = True
+            rows_to_skip = int(self.handle['noOfRows']['value'])
+            _LOGGER.debug("We need to skip {} rows".format(rows_to_skip))
 
-        names = self.handle['useColumns']['value']
-        has_type = ':' in names
-        names = [] if names == '' else names.split(',')
-        if has_type:
-            typeMap = {
-                'str': 'object',
-                'int': 'int64',
-                'float': 'float64',
-                'bool': 'bool_',
-                'timestamp': 'datetime64'
-            }
-            # column list can have a :type sepcifier
-            org_names = names
-            dtype = {}
-            names = []
-            for n in org_names:
-                if n == '':
-                    names.append(n)
-                else:
-                    nt = n.split(':')
-                    if len(nt) == 1:
-                        names.append(n)
-                    elif len(nt) == 2:
-                        if nt[1] not in ['str', 'int', 'float', 'timestamp', 'bool']:
-                            _LOGGER.error("{} must be in [str, int, float, timestamp, bool]".format(nt[1]))
-                            raise TypeError
-                        dtype[nt[0]] = typeMap[nt[1]]
-                        names.append(nt[0])
-                    else:
-                        _LOGGER.error("{} must be of the form <name>:<type>".format(nt))
-                        raise ValueError("{} must be of the form <name>:<type>".format(nt))
-        else:
-            dtype = None
-
-        if len(names) == 0:
-            # infer the header or use column numbers; don't override anything, use everything
-            self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize)
-        else:
-
-            # only use the given non-empty fields; change names
-            # ASSUME: the list has an entry per column in the file (empty or non-empty)
-            if self.handle['headerMethod']['value'] == 'skip_rows':
-                rows_to_skip = int(self.handle['noOfRows']['value'])
-                self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize,
-                                      header=0,
-                                      names=names,
-                                      dtype=dtype,
-                                      usecols=[n for n in names if n != ''],
-                                      skiprows=rows_to_skip)
-            elif self.handle['headerMethod']['value'] == 'combine_rows':
-                # TODO not clear at the moment how to process it.
-                pass
+        # check if variable columns are there
+        if self.handle['variableCols']['value'] == 'true':
+            _LOGGER.debug("We have variable no of columns per row")
+            if should_skip_row:
+                self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize, skiprows=rows_to_skip)
             else:
-                self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize,
-                                      header=0,
-                                      names=names,
-                                      dtype=dtype,
-                                      usecols=[n for n in names if n != ''])
+                self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize)
+            self.process_variable_columns = True
+        # Check the column processing method
+
+        else:
+            if self.handle['columnMethod']['value'] == 'explicit':
+                names = self.handle['useColumns']['value']
+                _LOGGER.debug("The column names explicitly given are {}".format(names))
+                has_type = ':' in names
+                names = [] if names == '' else names.split(',')
+                if has_type:
+                    typeMap = {
+                        'str': 'object',
+                        'int': 'int64',
+                        'float': 'float64',
+                        'bool': 'bool_',
+                        'timestamp': 'datetime64'
+                    }
+                    # column list can have a :type sepcifier
+                    org_names = names
+                    dtype = {}
+                    names = []
+                    for n in org_names:
+                        if n == '':
+                            names.append(n)
+                        else:
+                            nt = n.split(':')
+                            if len(nt) == 1:
+                                names.append(n)
+                            elif len(nt) == 2:
+                                if nt[1] not in ['str', 'int', 'float', 'timestamp', 'bool']:
+                                    _LOGGER.error("{} must be in [str, int, float, timestamp, bool]".format(nt[1]))
+                                    raise TypeError
+                                dtype[nt[0]] = typeMap[nt[1]]
+                                names.append(nt[0])
+                            else:
+                                _LOGGER.error("{} must be of the form <name>:<type>".format(nt))
+                                raise ValueError("{} must be of the form <name>:<type>".format(nt))
+                else:
+                    dtype = None
+
+                if should_skip_row:
+                    self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize,
+                                          header=0,
+                                          names=names,
+                                          dtype=dtype,
+                                          usecols=[n for n in names if n != ''],
+                                          skiprows=rows_to_skip)
+                else:
+                    self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize,
+                                          header=0,
+                                          names=names,
+                                          dtype=dtype,
+                                          usecols=[n for n in names if n != ''])
+
+            elif self.handle['columnMethod']['value'] == 'pick_from_file':
+                _LOGGER.debug("We are picking header names from some index in the file.")
+                column_row = int(self.handle['rowIndexForColumnNames']['value'])
+                if should_skip_row:
+                    self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize,
+                                          header=column_row, skiprows=rows_to_skip)
+                else:
+                    self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize,
+                                          header=column_row)
+
+        if self.handle['headerMethod']['value'] == 'combine_rows':
+
+            self.process_metadata = True
+            with open(csv_path) as fd:
+                meta_data_array = [next(fd).strip('\n') for i in range(rows_to_skip)]
+
+            meta_data_string = "_".join(meta_data_array)
+            self.meta_data = {self.handle['dataPointForCombine']['value']:
+                              meta_data_string}
+            _LOGGER.debug("The meta data picked from csv file {}".format(self.meta_data))
 
         self.file_iter = self.file_to_readings()
 
@@ -547,17 +619,11 @@ class CSVReader:
             if self.handle['ignoreNaN']['value'] != 'ignore':
                 self.validate_chunk(chunk)
         else:
-            # this row has some of the columns missing
-            is_nan = chunk.loc[0, :].isnull().values.all()  # check if all NaN values
-
-            # check if all blank values are there
-            is_blank = chunk.loc[0, :].astype(str).str.isspace().all()
-
-            if is_blank or is_nan:
-                # it is better to skip this row as it contains all columns nan or white spaces
-                return None
-            else:
-                chunk = chunk.dropna(axis=1)
+            auto_prefix = self.handle['autoGeneratePrefix']['value']
+            main_dict = {}
+            [main_dict.update({auto_prefix + "_" + str(i + 1): val})
+             for i, val in enumerate(chunk.iloc[0, :].values) if not pd.isnull(val)]
+            chunk = pd.DataFrame([main_dict])
 
         if (self.ts_col != '') and (self.ts_col in chunk) and \
                 (self.is_historic_ts or self.is_delta_ts):
@@ -604,11 +670,20 @@ class CSVReader:
                 modified_timestamp = str(now_timestamp.replace(microsecond=useconds))
                 useconds += uniform_interval
 
-            reading = {
-                'asset': self.asset_name,
-                'timestamp': modified_timestamp,
-                'readings': row_values
-            }
+            if not self.meta_data_ingested and self.process_metadata:
+                row_values.update(self.meta_data)
+                reading = {
+                    'asset': self.asset_name,
+                    'timestamp': modified_timestamp,
+                    'readings': row_values
+                }
+                self.meta_data_ingested = True
+            else:
+                reading = {
+                    'asset': self.asset_name,
+                    'timestamp': modified_timestamp,
+                    'readings': row_values
+                }
 
             if self.is_burst:
                 readings.append(reading)
