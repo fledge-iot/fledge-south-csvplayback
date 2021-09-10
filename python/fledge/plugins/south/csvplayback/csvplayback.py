@@ -71,7 +71,7 @@ _DEFAULT_CONFIG = {
         'displayName': 'CSV Directory Name',
         'order': '2'
     },
-    'csvFilename': {
+    'csvFileName': {
         'description': 'CSV file name to search inside directory. Not necessary a full'
                        'file name.',
         'type': 'string',
@@ -135,7 +135,7 @@ _DEFAULT_CONFIG = {
         'type': 'string',
         'default': '',
         'displayName': 'Column names / overrides',
-        'validity': "columnMethod == \"explicit\"",
+        'validity': "columnMethod == \"explicit\" && ",
         'order': '10'
     },
     'rowIndexForColumnNames': {
@@ -275,13 +275,13 @@ def plugin_init(config):
         if not os.path.exists(csv_dir):
             raise FileNotFoundError
 
-        csv_file_name_pattern = handle['csvFilename']['value']
+        csv_file_name_pattern = handle['csvFileName']['value']
         full_file_list = csv_dir + '/' + '*'
         file_list = sorted(glob.glob(full_file_list))
         if not file_list:
             raise FileNotFoundError
         filtered_files = [f for f in file_list if os.path.split(f)[1].find(csv_file_name_pattern) != -1
-                          and os.path.split(f)[1].contains('.csv')]
+                          and os.path.split(f)[1].endswith(('.csv', '.bz2', '.7z', '.gz'))]
         if not filtered_files:
             raise FileNotFoundError
 
@@ -487,7 +487,7 @@ class CSVReader:
         Returns: None
         """
 
-        csv_path = self.handle['csvFilename']['value']
+        csv_path = self.handle['csvFileName']['value']
         if os.path.isfile(csv_path) and os.path.getsize(csv_path) == 0:
             _LOGGER.error(f"CSV file {csv_path} has zero length")
             raise EOFError
