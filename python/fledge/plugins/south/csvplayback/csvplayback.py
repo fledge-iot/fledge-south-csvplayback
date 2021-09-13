@@ -65,7 +65,7 @@ _DEFAULT_CONFIG = {
     },
     'csvDirName': {
         'description': 'The directory where CSV file exists. Default is '
-                       'FLEDGE_DATA or FOGLAMP_ROOT/data',
+                       'FLEDGE_DATA or FLEDGE_ROOT/data',
         'type': 'string',
         'default': 'FLEDGE_DATA',
         'displayName': 'CSV Directory Name',
@@ -82,26 +82,26 @@ _DEFAULT_CONFIG = {
     'headerMethod': {
         'description': 'Method for processing the header.',
         'type': 'enumeration',
-        'default': 'normal',
-        'options': ['skip_rows', 'combine_rows', 'normal'],
+        'default': 'skip_rows',
+        'options': ['skip_rows', 'pass_in_datapoint', 'No_Headers'],
         'displayName': 'Header Processing Method',
         'order': '4'
     },
     'dataPointForCombine': {
         'description': 'If header method is combine rows then it is the datapoint name '
-                       'when the given number of rows will get combined.',
+                       'where the given number of rows will get combined.',
         'type': 'string',
         'default': 'metadata',
-        'displayName': 'Data Point For Combine',
-        'validity': "headerMethod == \"combine_rows\"",
+        'displayName': 'Data Point for Header Rows',
+        'validity': "headerMethod == \"pass_in_datapoint\"",
         'order': '5'
     },
     'noOfRows': {
         'description': 'No. of rows to skip or combine to single value.',
         'type': 'integer',
         'default': '1',
-        'displayName': 'No of rows to skip/combine.',
-        'validity': "headerMethod == \"skip_rows\" || headerMethod == \"combine_rows\"",
+        'displayName': 'Number of rows to skip/combine.',
+        'validity': "headerMethod == \"skip_rows\" || headerMethod == \"pass_in_datapoint\"",
         'minimum': '1',
         'order': '6'
     },
@@ -115,10 +115,10 @@ _DEFAULT_CONFIG = {
     'columnMethod': {
         'description': 'Method for getting the column names.',
         'type': 'enumeration',
-        'default': 'explicit',
+        'default': 'pick_from_file',
         'options': ['explicit', 'pick_from_file'],
         'validity': "variableCols == \"false\"",
-        'displayName': 'Header Processing Method',
+        'displayName': 'Column Processing Method',
         'order': '8'
     },
     'autoGeneratePrefix': {
@@ -134,8 +134,8 @@ _DEFAULT_CONFIG = {
                        'if column method is explicit.',
         'type': 'string',
         'default': '',
-        'displayName': 'Column names / overrides',
-        'validity': "columnMethod == \"explicit\" && ",
+        'displayName': 'Column names and data types for explicit',
+        'validity': "columnMethod == \"explicit\" && variableCols == \"false\"",
         'order': '10'
     },
     'rowIndexForColumnNames': {
@@ -145,7 +145,7 @@ _DEFAULT_CONFIG = {
         'default': '0',
         'minimum': '0',
         'displayName': 'Row Index For Column names',
-        'validity': "columnMethod == \"pick_from_file\"",
+        'validity': "columnMethod == \"pick_from_file\" && variableCols == \"false\"",
         'order': '11'
     },
     'ingestMode': {
@@ -163,6 +163,7 @@ _DEFAULT_CONFIG = {
         'displayName': 'Sample rate',
         'minimum': '1',
         'maximum': '1000000',
+        'validity': "variableCols == \"false\"",
         'order': '13'
     },
     'burstInterval': {
@@ -210,6 +211,7 @@ _DEFAULT_CONFIG = {
         'default': 'ignore',
         'options': ['ignore', 'report'],
         'displayName': 'Ignore or report for NaN',
+        'validity': "variableCols == \"false\"",
         'order': '18'
     },
     'postProcessMethod': {
@@ -268,25 +270,6 @@ def plugin_init(config):
 
     try:
         errors = False
-        if handle['csvDirName']['value'] == "FLEDGE_DATA":
-            csv_dir = _FLEDGE_DATA
-        else:
-            csv_dir = _FLEDGE_DATA
-        if not os.path.exists(csv_dir):
-            raise FileNotFoundError
-
-        csv_file_name_pattern = handle['csvFileName']['value']
-        full_file_list = csv_dir + '/' + '*'
-        file_list = sorted(glob.glob(full_file_list))
-        if not file_list:
-            raise FileNotFoundError
-        filtered_files = [f for f in file_list if os.path.split(f)[1].find(csv_file_name_pattern) != -1
-                          and os.path.split(f)[1].endswith(('.csv', '.bz2', '.7z', '.gz'))]
-        if not filtered_files:
-            raise FileNotFoundError
-
-        # Taking the file name as the first file found.
-        handle['csvFileName']['value'] = filtered_files[0]
 
         if int(handle['sampleRate']['value']) < 1 or int(handle['sampleRate']['value']) > 1000000:
             _LOGGER.error("sampleRate should be in range 1-1000000")
@@ -360,6 +343,8 @@ def plugin_reconfigure(handle, new_config):
     """
     _LOGGER.info("Old config for playback plugin {} \n new config {}".format(handle, new_config))
     plugin_shutdown(handle)
+    # Done to ensure proper shutdown of plugin
+    time.sleep(20)
     new_handle = plugin_init(new_config)
 
     if new_handle['mode']['value'] == 'async':
@@ -376,7 +361,9 @@ def plugin_shutdown(handle):
         plugin shutdown
     """
     _LOGGER.info('csv playback Plugin Shutting down')
-
+    global reader
+    reader.shutdown_plugin = True
+    _LOGGER.debug("Shutdown flag of csv reader set true.")
     if handle['mode']['value'] == 'async':
         global producer, consumer, wait_event, condition, readingsQueue, mode
         # The wait event flag needs to be set to shut down the plugin
@@ -453,11 +440,15 @@ if POLL_MODE:
                 readings = next(reader.file_iter, None)
             elif handle['postProcessMethod']['value'] == 'delete':
                 _LOGGER.info('Deleting the csv file it')
-                os.remove(handle['csvFileName']['value'])
+                os.remove(reader.current_csv_file)
+                reader.read_csv_file()
+                readings = next(reader.file_iter, None)
             elif handle['postProcessMethod']['value'] == 'rename':
                 _LOGGER.info('Renaming the csv file with suffix {}'.format(handle['suffixName']['value']))
-                rename_name = handle['csvFileName']['value'] + handle['suffixName']['value']
-                os.rename(handle['csvFileName']['value'], rename_name)
+                rename_name = reader.current_csv_file + handle['suffixName']['value']
+                os.rename(reader.current_csv_file, rename_name)
+                reader.read_csv_file()
+                readings = next(reader.file_iter, None)
 
         # read and return subsequent asset formatted values from csv file
         return readings
@@ -475,11 +466,51 @@ class CSVReader:
         self.ts_col = self.handle['timestampCol']['value']
         self.c = datetime.datetime.now(datetime.timezone.utc).astimezone()
         self.ts_diff = None
-        self.read_csv_file()
         self.process_variable_columns = False
         self.process_metadata = False
         self.meta_data_ingested = False
         self.meta_data = {}
+        self.current_csv_file = None
+        self.shutdown_plugin = False
+        self.read_csv_file()
+
+    def get_csv_file_name(self):
+        if self.handle['csvDirName']['value'] == "FLEDGE_DATA":
+            csv_dir = _FLEDGE_DATA
+        else:
+            csv_dir = _FLEDGE_DATA
+        if not os.path.exists(csv_dir):
+            raise FileNotFoundError
+
+        csv_file_name_pattern = self.handle['csvFileName']['value']
+        full_file_list = csv_dir + '/' + '*'
+        found = False
+        while True:
+            file_list = sorted(glob.glob(full_file_list))
+            _LOGGER.debug("The Shutdown flag is {}.".format(self.shutdown_plugin))
+            if self.shutdown_plugin:
+                _LOGGER.debug("The Shutdown flag is set. No wait required now.")
+                break
+            if not file_list:
+                _LOGGER.info("There are no files in this directory currently. Waiting for some time.")
+            filtered_files = [f for f in file_list if os.path.split(f)[1].find(csv_file_name_pattern) != -1
+                              and os.path.split(f)[1].endswith(('.csv', 'csv.bz2', 'csv.gz'))]
+            if not filtered_files:
+                _LOGGER.info("There are no csv files in this directory currently. Waiting for some time.")
+            else:
+                found = True
+
+            if found:
+                break
+            else:
+                time.sleep(10)
+
+        if self.shutdown_plugin:
+            _LOGGER.debug("The shutdown flag has been set. Not return anything.")
+            return None
+        # Taking the file name as the first file found.
+        self.current_csv_file = filtered_files[0]
+        return self.current_csv_file
 
     def read_csv_file(self):
         """Creates iterators for retrieving chunks of lines from a csv file, and collections
@@ -487,7 +518,10 @@ class CSVReader:
         Returns: None
         """
 
-        csv_path = self.handle['csvFileName']['value']
+        csv_path = self.get_csv_file_name()
+        _LOGGER.debug("The file to be played is {}".format(csv_path))
+        if not csv_path:
+            return None
         if os.path.isfile(csv_path) and os.path.getsize(csv_path) == 0:
             _LOGGER.error(f"CSV file {csv_path} has zero length")
             raise EOFError
@@ -501,7 +535,7 @@ class CSVReader:
 
         should_skip_row = False
         if self.handle['headerMethod']['value'] == 'skip_rows' or \
-                self.handle['headerMethod']['value'] == 'combine_rows':
+                self.handle['headerMethod']['value'] == 'pass_in_datapoint':
             should_skip_row = True
             rows_to_skip = int(self.handle['noOfRows']['value'])
             _LOGGER.debug("We need to skip {} rows".format(rows_to_skip))
@@ -510,9 +544,13 @@ class CSVReader:
         if self.handle['variableCols']['value'] == 'true':
             _LOGGER.debug("We have variable no of columns per row")
             if should_skip_row:
-                self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize, skiprows=rows_to_skip, header=None)
+                self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize,
+                                      skiprows=rows_to_skip, header=None,
+                                      engine='python')
             else:
-                self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize, header=None)
+                self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize,
+                                      header=None,
+                                      engine='python')
             self.process_variable_columns = True
         # Check the column processing method
 
@@ -577,7 +615,7 @@ class CSVReader:
                     self.df = pd.read_csv(csv_path, iterator=True, chunksize=chunksize,
                                           header=column_row)
 
-        if self.handle['headerMethod']['value'] == 'combine_rows':
+        if self.handle['headerMethod']['value'] == 'pass_in_datapoint':
 
             self.process_metadata = True
             with open(csv_path) as fd:
@@ -587,6 +625,7 @@ class CSVReader:
             self.meta_data = {self.handle['dataPointForCombine']['value']:
                               meta_data_string}
             _LOGGER.debug("The meta data picked from csv file {}".format(self.meta_data))
+            self.meta_data_ingested = False
 
         self.file_iter = self.file_to_readings()
 
@@ -621,9 +660,12 @@ class CSVReader:
         else:
             auto_prefix = self.handle['autoGeneratePrefix']['value']
             main_dict = {}
-            [main_dict.update({auto_prefix + "_" + str(i + 1): val})
-             for i, val in enumerate(chunk.iloc[0, :].values) if not pd.isnull(val)]
-            chunk = pd.DataFrame([main_dict])
+            try:
+                [main_dict.update({auto_prefix + "_" + str(i + 1): val})
+                 for i, val in enumerate(chunk.iloc[0, :].values) if not pd.isnull(val)]
+                chunk = pd.DataFrame([main_dict])
+            except IndexError:
+                return None
 
         if (self.ts_col != '') and (self.ts_col in chunk) and \
                 (self.is_historic_ts or self.is_delta_ts):
