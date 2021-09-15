@@ -34,6 +34,7 @@ TIME_IT = True  # async timing information
 # GLOBAL VARIABLES DECLARATION
 _FLEDGE_ROOT = os.getenv("FLEDGE_ROOT", default='/usr/local/fledge')
 _FLEDGE_DATA = os.path.expanduser(_FLEDGE_ROOT + '/data')
+_FLEDGE_DATA_PREFIX = "FLEDGE_DATA"
 
 _LOGGER = logger.setup(__name__, level=logging.DEBUG)
 
@@ -427,31 +428,92 @@ if POLL_MODE:
         global reader
         if reader is None:
             raise ValueError
-
-        readings = next(reader.file_iter, None)
-
-        if readings is None:
-
-            _LOGGER.info('End of file reached.')
-            if handle['postProcessMethod']['value'] == 'continue_playing':
-                # reload csv file
-                _LOGGER.info('Replaying it')
+        if not reader.current_csv_file:
+            _LOGGER.info("No file found to play inside the given directory.")
+            return None
+        else:
+            if reader.file_iter:
+                readings = next(reader.file_iter, None)
+            else:
+                _LOGGER.info("The csv file finally found. Playing readings from it.")
                 reader.read_csv_file()
                 readings = next(reader.file_iter, None)
-            elif handle['postProcessMethod']['value'] == 'delete':
-                _LOGGER.info('Deleting the csv file it')
-                os.remove(reader.current_csv_file)
+
+            if not readings:
+                _LOGGER.info('End of file reached.')
+
+                if handle['postProcessMethod']['value'] == 'continue_playing':
+                    # reload csv file
+                    _LOGGER.info('Replaying it')
+                elif handle['postProcessMethod']['value'] == 'delete':
+                    _LOGGER.info('Deleting the csv file it')
+                    os.remove(reader.current_csv_file)
+                elif handle['postProcessMethod']['value'] == 'rename':
+                    _LOGGER.info('Renaming the csv file with suffix {}'.format(handle['suffixName']['value']))
+                    rename_name = reader.current_csv_file + handle['suffixName']['value']
+                    os.rename(reader.current_csv_file, rename_name)
+
+                # Reset the current file.
+                reader.current_csv_file = None
+                reader.file_iter = None
+
+                # start the finder thread once again.
+                reader.start_finder_thread()
+
+                # load the file once again.
                 reader.read_csv_file()
-                readings = next(reader.file_iter, None)
-            elif handle['postProcessMethod']['value'] == 'rename':
-                _LOGGER.info('Renaming the csv file with suffix {}'.format(handle['suffixName']['value']))
-                rename_name = reader.current_csv_file + handle['suffixName']['value']
-                os.rename(reader.current_csv_file, rename_name)
-                reader.read_csv_file()
-                readings = next(reader.file_iter, None)
+                # fetch readings from it.
+                if reader.file_iter:
+                    readings = next(reader.file_iter, None)
+                else:
+                    _LOGGER.info("The next file could not be loaded.")
+                    readings = None
 
         # read and return subsequent asset formatted values from csv file
         return readings
+
+
+class FileFinder(Thread):
+    def __init__(self, parent):
+        """
+        Start the finder thread that looks out for csv files in directory.
+        Args:
+            parent: The reader class object.
+        """
+        super(FileFinder, self).__init__()
+        self.parent = parent
+
+    def run(self):
+        if self.parent.handle['csvDirName']['value'].startswith(_FLEDGE_DATA_PREFIX):
+            if len(self.parent.handle['csvDirName']['value'].split("/")) > 1:
+                csv_dir = self.parent.handle['csvDirName']['value'].replace(_FLEDGE_DATA_PREFIX, _FLEDGE_DATA)
+            else:
+                csv_dir = _FLEDGE_DATA
+        else:
+            csv_dir = self.parent.handle['csvDirName']['value']
+
+        _LOGGER.info("The directory to be searched is {}".format(csv_dir))
+        if not os.path.exists(csv_dir):
+            raise FileNotFoundError
+
+        csv_file_name_pattern = self.parent.handle['csvFileName']['value']
+        full_file_list = csv_dir + '/' + '*'
+        found = False
+        while not found and not self.parent.shutdown_plugin:
+            time.sleep(10)
+            file_list = sorted(glob.glob(full_file_list))
+            if not file_list:
+                _LOGGER.info("There are no files in this directory currently. Waiting for some time.")
+                continue
+            filtered_files = [f for f in file_list if os.path.split(f)[1].find(csv_file_name_pattern) != -1
+                              and os.path.split(f)[1].endswith(('.csv', 'csv.bz2', 'csv.gz'))]
+            if not filtered_files:
+                _LOGGER.info("There are no csv files in this directory currently. Waiting for some time.")
+            else:
+                found = True
+                # Taking the file name as the first file found.
+                _LOGGER.info("File found will play the file {}".format(filtered_files[0]))
+                self.parent.current_csv_file = filtered_files[0]
 
 
 class CSVReader:
@@ -466,50 +528,26 @@ class CSVReader:
         self.ts_col = self.handle['timestampCol']['value']
         self.c = datetime.datetime.now(datetime.timezone.utc).astimezone()
         self.ts_diff = None
+        self.file_iter = None
         self.process_variable_columns = False
         self.process_metadata = False
         self.meta_data_ingested = False
         self.meta_data = {}
         self.current_csv_file = None
         self.shutdown_plugin = False
+        self.finder_thread = None
+        self.start_finder_thread()
         self.read_csv_file()
 
+    def start_finder_thread(self):
+        self.finder_thread = FileFinder(self)
+        self.finder_thread.start()
+
+    def stop_finder_thread(self):
+        self.finder_thread.join()
+        self.finder_thread = None
+
     def get_csv_file_name(self):
-        if self.handle['csvDirName']['value'] == "FLEDGE_DATA":
-            csv_dir = _FLEDGE_DATA
-        else:
-            csv_dir = _FLEDGE_DATA
-        if not os.path.exists(csv_dir):
-            raise FileNotFoundError
-
-        csv_file_name_pattern = self.handle['csvFileName']['value']
-        full_file_list = csv_dir + '/' + '*'
-        found = False
-        while True:
-            file_list = sorted(glob.glob(full_file_list))
-            _LOGGER.debug("The Shutdown flag is {}.".format(self.shutdown_plugin))
-            if self.shutdown_plugin:
-                _LOGGER.debug("The Shutdown flag is set. No wait required now.")
-                break
-            if not file_list:
-                _LOGGER.info("There are no files in this directory currently. Waiting for some time.")
-            filtered_files = [f for f in file_list if os.path.split(f)[1].find(csv_file_name_pattern) != -1
-                              and os.path.split(f)[1].endswith(('.csv', 'csv.bz2', 'csv.gz'))]
-            if not filtered_files:
-                _LOGGER.info("There are no csv files in this directory currently. Waiting for some time.")
-            else:
-                found = True
-
-            if found:
-                break
-            else:
-                time.sleep(10)
-
-        if self.shutdown_plugin:
-            _LOGGER.debug("The shutdown flag has been set. Not return anything.")
-            return None
-        # Taking the file name as the first file found.
-        self.current_csv_file = filtered_files[0]
         return self.current_csv_file
 
     def read_csv_file(self):
@@ -525,6 +563,8 @@ class CSVReader:
         if os.path.isfile(csv_path) and os.path.getsize(csv_path) == 0:
             _LOGGER.error(f"CSV file {csv_path} has zero length")
             raise EOFError
+        else:
+            self.stop_finder_thread()
 
         # we read a chunk whose size is based on whether we are returning
         # a second's worth of data if we are in "continuous" mode, otherwise a "burst's" worth of data
