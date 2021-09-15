@@ -345,7 +345,7 @@ def plugin_reconfigure(handle, new_config):
     _LOGGER.info("Old config for playback plugin {} \n new config {}".format(handle, new_config))
     plugin_shutdown(handle)
     # Done to ensure proper shutdown of plugin
-    time.sleep(20)
+    time.sleep(10)
     new_handle = plugin_init(new_config)
 
     if new_handle['mode']['value'] == 'async':
@@ -500,7 +500,7 @@ class FileFinder(Thread):
         full_file_list = csv_dir + '/' + '*'
         found = False
         while not found and not self.parent.shutdown_plugin:
-            time.sleep(10)
+            time.sleep(2)
             file_list = sorted(glob.glob(full_file_list))
             if not file_list:
                 _LOGGER.info("There are no files in this directory currently. Waiting for some time.")
@@ -805,7 +805,7 @@ class Producer(Thread):
 
             if not reader.current_csv_file:
                 _LOGGER.info("No file found yet. Waiting...")
-                time.sleep(10)
+                time.sleep(5)
                 continue
             if not reader.df:
                 _LOGGER.info("File has been found. Playing it in async mode.")
@@ -855,7 +855,7 @@ class Producer(Thread):
                     readingsQueue.append(chunk)
                 else:
                     _LOGGER.info("The next file could not be loaded. Waiting")
-                    time.sleep(10)
+                    time.sleep(5)
                     continue
 
             # Notifying the consumer that data has been read.
@@ -883,7 +883,7 @@ class Consumer(Thread):
             # Check if shutdown is called
 
             if not reader.current_csv_file:
-                time.sleep(10)
+                time.sleep(5)
                 continue
             global wait_event
             if wait_event.is_set():
