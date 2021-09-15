@@ -69,7 +69,7 @@ _DEFAULT_CONFIG = {
                        'FLEDGE_DATA or FLEDGE_ROOT/data',
         'type': 'string',
         'default': 'FLEDGE_DATA',
-        'displayName': 'CSV Directory Name',
+        'displayName': 'CSV directory name',
         'order': '2'
     },
     'csvFileName': {
@@ -77,23 +77,23 @@ _DEFAULT_CONFIG = {
                        'file name.',
         'type': 'string',
         'default': '',
-        'displayName': 'CSV file Pattern',
+        'displayName': 'CSV file pattern',
         'order': '3'
     },
     'headerMethod': {
         'description': 'Method for processing the header.',
         'type': 'enumeration',
-        'default': 'skip_rows',
-        'options': ['skip_rows', 'pass_in_datapoint', 'No_Headers'],
-        'displayName': 'Header Processing Method',
+        'default': 'do_not_skip',
+        'options': ['skip_rows', 'pass_in_datapoint', 'do_not_skip'],
+        'displayName': 'Header processing method',
         'order': '4'
     },
     'dataPointForCombine': {
-        'description': 'If header method is combine rows then it is the datapoint name '
+        'description': 'If header method is pass_in_datapoint then it is the datapoint name '
                        'where the given number of rows will get combined.',
         'type': 'string',
         'default': 'metadata',
-        'displayName': 'Data Point for Header Rows',
+        'displayName': 'Data point for header rows',
         'validity': "headerMethod == \"pass_in_datapoint\"",
         'order': '5'
     },
@@ -101,7 +101,7 @@ _DEFAULT_CONFIG = {
         'description': 'No. of rows to skip or combine to single value.',
         'type': 'integer',
         'default': '1',
-        'displayName': 'Number of rows to skip/combine.',
+        'displayName': 'Number of rows to skip/pass_in_datapoint.',
         'validity': "headerMethod == \"skip_rows\" || headerMethod == \"pass_in_datapoint\"",
         'minimum': '1',
         'order': '6'
@@ -110,7 +110,7 @@ _DEFAULT_CONFIG = {
         'description': 'Are variable number of values present in every row?',
         'type': 'boolean',
         'default': 'false',
-        'displayName': 'Dynamic Columns',
+        'displayName': 'Dynamic columns',
         'order': '7'
     },
     'columnMethod': {
@@ -119,14 +119,14 @@ _DEFAULT_CONFIG = {
         'default': 'pick_from_file',
         'options': ['explicit', 'pick_from_file'],
         'validity': "variableCols == \"false\"",
-        'displayName': 'Column Processing Method',
+        'displayName': 'Column processing method',
         'order': '8'
     },
     'autoGeneratePrefix': {
         'description': 'The prefix for auto generation of columns if variable Columns is true.',
         'type': 'string',
         'default': 'column',
-        'displayName': 'Auto Generate Prefix',
+        'displayName': 'Auto generate prefix',
         'validity': "variableCols == \"true\"",
         'order': '9'
     },
@@ -145,7 +145,7 @@ _DEFAULT_CONFIG = {
         'type': 'integer',
         'default': '0',
         'minimum': '0',
-        'displayName': 'Row Index For Column names',
+        'displayName': 'Row index for column names',
         'validity': "columnMethod == \"pick_from_file\" && variableCols == \"false\"",
         'order': '11'
     },
@@ -220,7 +220,7 @@ _DEFAULT_CONFIG = {
         'type': 'enumeration',
         'options': ['continue_playing', 'delete', 'rename'],
         'default': 'continue_playing',
-        'displayName': 'Post Process Method',
+        'displayName': 'Post process method',
         'order': '19'
     },
     'suffixName': {
@@ -228,7 +228,7 @@ _DEFAULT_CONFIG = {
                        'rename',
         'type': 'string',
         'default': '.tmp',
-        'displayName': 'Suffix Name',
+        'displayName': 'Suffix name',
         'validity': "postProcessMethod == \"rename\"",
         'order': '20'
     },
