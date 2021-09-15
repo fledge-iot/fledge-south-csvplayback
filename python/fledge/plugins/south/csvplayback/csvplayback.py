@@ -528,6 +528,7 @@ class CSVReader:
         self.ts_col = self.handle['timestampCol']['value']
         self.c = datetime.datetime.now(datetime.timezone.utc).astimezone()
         self.ts_diff = None
+        self.df = None
         self.file_iter = None
         self.process_variable_columns = False
         self.process_metadata = False
@@ -798,11 +799,17 @@ class Producer(Thread):
         self.handle = handle
 
     def run(self):
-        global readingsQueue
-        more = True
+        global readingsQueue, reader
 
-        while more:
+        while not reader.shutdown_plugin:
 
+            if not reader.current_csv_file:
+                _LOGGER.info("No file found yet. Waiting...")
+                time.sleep(10)
+                continue
+            if not reader.df:
+                _LOGGER.info("File has been found. Playing it in async mode.")
+                reader.read_csv_file()
             # If plugin shutdown has been called
             global wait_event
             if wait_event.is_set():
@@ -817,18 +824,39 @@ class Producer(Thread):
                 chunk = next(reader.df)
                 readingsQueue.append(chunk)
             except StopIteration:
+
+                _LOGGER.info('End of file reached.')
+
                 if self.handle['postProcessMethod']['value'] == 'continue_playing':
                     # reload csv file
-                    reader.read_csv_file()
-                else:
-                    readingsQueue.append(_sentinel)
-                    more = False
+                    _LOGGER.info('Replaying it')
+                elif self.handle['postProcessMethod']['value'] == 'delete':
+                    _LOGGER.info('Deleting the csv file it')
+                    os.remove(reader.current_csv_file)
+                elif self.handle['postProcessMethod']['value'] == 'rename':
+                    _LOGGER.info('Renaming the csv file with suffix {}'.format(self.handle['suffixName']['value']))
+                    rename_name = reader.current_csv_file + self.handle['suffixName']['value']
+                    os.rename(reader.current_csv_file, rename_name)
 
-                    if self.handle['postProcessMethod']['value'] == 'delete':
-                        os.remove(self.handle['csvFileName']['value'])
-                    elif self.handle['postProcessMethod']['value'] == 'rename':
-                        rename_name = self.handle['csvFileName']['value'] + self.handle['suffixName']['value']
-                        os.rename(self.handle['csvFileName']['value'], rename_name)
+                # Reset the current file.
+                reader.current_csv_file = None
+                reader.df = None
+
+                # start the finder thread once again.
+                reader.start_finder_thread()
+
+                time.sleep(5)
+                # load the file once again.
+                reader.read_csv_file()
+                # fetch readings from it.
+                if reader.df:
+                    _LOGGER.info("The next file loaded. Playing it...")
+                    chunk = next(reader.df)
+                    readingsQueue.append(chunk)
+                else:
+                    _LOGGER.info("The next file could not be loaded. Waiting")
+                    time.sleep(10)
+                    continue
 
             # Notifying the consumer that data has been read.
             condition.notify()
@@ -851,8 +879,12 @@ class Consumer(Thread):
         n_readings = 0
         org_start_time = datetime.datetime.now()
 
-        while True:
+        while not reader.shutdown_plugin:
             # Check if shutdown is called
+
+            if not reader.current_csv_file:
+                time.sleep(10)
+                continue
             global wait_event
             if wait_event.is_set():
                 return
