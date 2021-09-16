@@ -453,12 +453,13 @@ if POLL_MODE:
                     rename_name = reader.current_csv_file + handle['suffixName']['value']
                     os.rename(reader.current_csv_file, rename_name)
 
-                # Reset the current file.
-                reader.current_csv_file = None
-                reader.file_iter = None
+                if handle['postProcessMethod']['value'] != 'continue_playing':
+                    # Reset the current file.
+                    reader.current_csv_file = None
+                    reader.file_iter = None
 
-                # start the finder thread once again.
-                reader.start_finder_thread()
+                    # start the finder thread once again.
+                    reader.start_finder_thread()
 
                 # load the file once again.
                 reader.read_csv_file()
@@ -545,8 +546,9 @@ class CSVReader:
         self.finder_thread.start()
 
     def stop_finder_thread(self):
-        self.finder_thread.join()
-        self.finder_thread = None
+        if self.finder_thread:
+            self.finder_thread.join()
+            self.finder_thread = None
 
     def get_csv_file_name(self):
         return self.current_csv_file
@@ -838,14 +840,16 @@ class Producer(Thread):
                     rename_name = reader.current_csv_file + self.handle['suffixName']['value']
                     os.rename(reader.current_csv_file, rename_name)
 
-                # Reset the current file.
-                reader.current_csv_file = None
-                reader.df = None
+                if self.handle['postProcessMethod']['value'] != 'continue_playing':
+                    # Reset the current file.
+                    reader.current_csv_file = None
+                    reader.df = None
 
-                # start the finder thread once again.
-                reader.start_finder_thread()
+                    # start the finder thread once again.
+                    reader.start_finder_thread()
 
-                time.sleep(5)
+                    time.sleep(5)
+
                 # load the file once again.
                 reader.read_csv_file()
                 # fetch readings from it.
