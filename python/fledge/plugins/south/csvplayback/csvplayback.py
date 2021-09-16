@@ -73,8 +73,8 @@ _DEFAULT_CONFIG = {
         'order': '2'
     },
     'csvFileName': {
-        'description': 'CSV file name to search inside directory. Not necessary a full'
-                       'file name.',
+        'description': 'CSV file name or pattern to search inside directory. Not necessarily an '
+                       'exact file name.',
         'type': 'string',
         'default': '',
         'displayName': 'CSV file pattern',
@@ -753,7 +753,7 @@ class CSVReader:
                 modified_timestamp = str(now_timestamp.replace(microsecond=useconds))
                 useconds += uniform_interval
 
-            if not self.meta_data_ingested and self.process_metadata:
+            if self.process_metadata:
                 row_values.update(self.meta_data)
                 reading = {
                     'asset': self.asset_name,
