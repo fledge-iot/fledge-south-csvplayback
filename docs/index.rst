@@ -170,11 +170,11 @@ The plugin can also play a file that has variable columns in every line.
 Execution
 ---------
 
-Assuming you have a csv file named vibration.csv inside FLEDGE_ROOT/data. Use the following command to use the plugin.
+Assuming you have a csv file named vibration.csv inside FLEDGE_ROOT/data/csv_data. The csv file has fixed number of columns per row.  Also assuming the column names are present in the first line. The plugin will rename the file with suffix .tmp after playing. Here is the curl command for that.
 
     .. code-block:: console
 
-        curl -sX POST http://localhost:8081/fledge/service -d '{"name":"My_south","type":"south","plugin":"csvplayback","enabled":false,"config":{"assetName":{"value":"My_csv_asset"},  "csvFilename":{"value":"vibration.csv"}, "repeatLoop":{"value":"true"}, "ingestMode":{"value":"burst"}}}' |jq
+        curl -sX POST http://localhost:8081/fledge/service -d '{"name":"My_south","type":"south","plugin":"csvplayback","enabled":false,"config":{"assetName":{"value":"My_csv_asset"},  "csvDirName":{"value":"FLEDGE_DATA/csv_data"}, "csvFileName":{"value":"vib"}, "headerMethod":{"value":"do_not_skip"}, "variableCols":{"value":"false"}, "columnMethod":{"value":"pick_from_file"}, "rowIndexForColumnNames":{"value":"0"}, , "ingestMode":{"value":"burst"}, "sampleRate":{"value":"8000"}, "postProcessMethod":{"value":"rename"},  "suffixName":{"value":".tmp"}}}' |jq
 
 
 Poll Vs Async
