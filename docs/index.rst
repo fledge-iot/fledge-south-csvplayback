@@ -1,10 +1,12 @@
-.. |config1| image:: images/csvplayback.jpg
+.. |config1| image:: images/csv_config1.jpg
+.. |config2| image:: images/csv_config2.jpg
+
 
 
 CSV Playback
 ============
 
-The plugin plays a csv file inside FLEDGE_ROOT/data. It converts the columns of csv file into readings which are datapoints of an output asset.
+The plugin plays a csv file inside some given directory in file system (The default being FLEDGE_ROOT/data). It converts the columns of csv file into readings which are datapoints of an output asset.
 The plugin plays readings at some configurable rate.
 
 We can also convert the columns of csv file into some other data type. For example from float to integer. The converted data will be part of reading not the CSV file.
@@ -15,14 +17,66 @@ We can also copy the timestamp if present in the CSV file. This time stamp becom
 
 The plugin can also play the file in a loop which means it can start again if end of the file has reached.
 
+The plugin can also play a file that has variable columns in every line.
 
 |config1|
 
   - **'assetName': type: string default: 'vibration'**:
                 The output asset that contains the readings.
 
-  - **'csvFilename': type: string default: ''**:
-                The CSV file name (with .csv extension) to play. It should be present in FLEDGE_ROOT/data.
+  - **'csvDirName': type: string default: 'FLEDGE_DATA'**:
+                The directory where CSV file exists. Default is FLEDGE_DATA or FLEDGE_ROOT/data
+
+  - **'csvFileName': type: string default: ''**:
+                CSV file name or pattern to search inside directory. Not necessarily an exact file name.
+                If there are multiple files matching with the pattern, then the plugin will pick the first file in
+                alphabetical order. If postProcessMethod is rename or delete then it will rename or delete the played
+                file and pick the next one and so on.
+
+  - **'headerMethod': type: enumeration default: 'do_not_skip'**:
+                The method for processing the header of csv file.
+
+                1. skip_rows : If this is selected then the plugin will skip and a given number of rows. The number of rows should be given in noOfRows config parameter given below.
+
+                2. pass_in_datapoint : If this is selected then the given no of rows will be combined into a string. This string will be present inside some given datapoint. Useful in cases where we want to ingest meta data along with readings from the csv file.
+
+                3. do_not_skip: This option will not take any action on the header.
+
+  - **'dataPointForCombine': type: string default: 'metadata'**:
+                If header method is pass_in_datapoint then it is the datapoint name
+                where the given number of rows will get combined.
+
+  - **'noOfRows': type: integer default: '1'**:
+                No. of rows to skip or combine to single value. Used when headerMethod is either skip_rows or pass_in_datapoint.
+
+  - **'variableCols': type: boolean default: 'false'**:
+                It should be set true when the columns in every row
+                of CSV is variable. For example
+                If you have a file like this
+
+                a,b,c
+
+                2,3,,23
+
+                4
+
+                Then you should set it true.
+                Note:
+                Only one reading will be ingested at a time in this case. If you want to increase the rate then increase
+                readingPerSec parameter in advanced plugin configuration.
+
+   - **'columnMethod': type: enumeration default: 'pick_from_file'**:
+                If variable Columns is false then it indicates how columns are considered.
+
+                1. pick_from_file : The columns will be picked using a row index given.
+
+                2. explicit : Specify the columns inside useColumns parameter.
+
+
+
+   - **'autoGeneratePrefix': type: string default: 'column'**:
+               If variable Columns is set true then data points will generated using the prefix.
+               For example if there is row like this 1,,2. We will get column_1: 1, column_3: 2. Empty values will be ignored.
 
   - **'useColumns': type: string default: ''**:
                 Format **column1:type,column2:type**
@@ -58,6 +112,11 @@ The plugin can also play the file in a loop which means it can start again if en
 
                 The data type will be converted to integer. Also column will be renamed.
 
+|config2|
+
+   - **'rowIndexForColumnNames': type: integer default: '0'**:
+                If column method is pick_from_file then it is the index where
+                from where column names are taken.
 
   - **'ingestMode': type: enumeration default: 'burst'**:
                 Burst or continuous mode for ingestion.
@@ -88,9 +147,25 @@ The plugin can also play the file in a loop which means it can start again if en
                 It is left to the user to ensure there are no missing values in CSV file. However if the option selected is report. Then plugin will check for NaN's and report error to user. This can serve as a way to check the CSV file for missing values. However the user has to take action on what to do with NaN values. The default action is to ignore them.
                 When error is reported the user must delete the south service and try again with clean CSV file.
 
-  - **'repeatLoop': type: boolean default: false**:
-                Read CSV in a loop i.e. on reaching End Of File, again go back to beginning of the file.
+   - **'postProcessMethod': type: enumeration default: 'continue_playing'**:
+                It is the method to process the CSV file once all rows are ingested.
+                It could be:
 
+                1. continue_playing
+
+                   Play the file again if finished.
+
+                2. delete
+
+                   Delete the played file once finished.
+
+                3. rename
+
+                   Rename the file with suffix after playing.
+
+
+   - **'suffixName': type: string default: '.tmp'**:
+                The suffix name for renaming the file if postProcess method is rename.
 
 Execution
 ---------
