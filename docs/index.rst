@@ -7,7 +7,7 @@ CSV Playback
 ============
 
 The plugin plays a csv file inside some given directory in file system (The default being FLEDGE_ROOT/data). It converts the columns of csv file into readings which are datapoints of an output asset.
-The plugin plays readings at some configurable rate.
+The plugin plays readings at some configured rate.
 
 We can also convert the columns of csv file into some other data type. For example from float to integer. The converted data will be part of reading not the CSV file.
 
@@ -36,7 +36,7 @@ The plugin can also play a file that has variable columns in every line.
   - **'headerMethod': type: enumeration default: 'do_not_skip'**:
                 The method for processing the header of csv file.
 
-                1. skip_rows : If this is selected then the plugin will skip and a given number of rows. The number of rows should be given in noOfRows config parameter given below.
+                1. skip_rows : If this is selected then the plugin will skip a given number of rows. The number of rows should be given in noOfRows config parameter given below.
 
                 2. pass_in_datapoint : If this is selected then the given no of rows will be combined into a string. This string will be present inside some given datapoint. Useful in cases where we want to ingest meta data along with readings from the csv file.
 
@@ -61,9 +61,10 @@ The plugin can also play a file that has variable columns in every line.
                 4
 
                 Then you should set it true.
-                Note:
-                Only one reading will be ingested at a time in this case. If you want to increase the rate then increase
-                readingPerSec parameter in advanced plugin configuration.
+
+                .. note::
+                    Only one reading will be ingested at a time in this case. If you want to increase the rate then increase
+                    readingPerSec parameter in advanced plugin configuration.
 
    - **'columnMethod': type: enumeration default: 'pick_from_file'**:
                 If variable Columns is false then it indicates how columns are considered.
@@ -76,7 +77,7 @@ The plugin can also play a file that has variable columns in every line.
 
    - **'autoGeneratePrefix': type: string default: 'column'**:
                If variable Columns is set true then data points will generated using the prefix.
-               For example if there is row like this 1,,2. We will get column_1: 1, column_3: 2. Empty values will be ignored.
+               For example if there is row like this 1,,2 and we chose autoGeneratePrefix to be column, then we will get data points like this column_1: 1, column_3: 2. Empty values will be ignored.
 
   - **'useColumns': type: string default: ''**:
                 Format **column1:type,column2:type**
@@ -174,8 +175,30 @@ Assuming you have a csv file named vibration.csv inside FLEDGE_ROOT/data/csv_dat
 
     .. code-block:: console
 
-        curl -sX POST http://localhost:8081/fledge/service -d '{"name":"My_south","type":"south","plugin":"csvplayback","enabled":false,"config":{"assetName":{"value":"My_csv_asset"},  "csvDirName":{"value":"FLEDGE_DATA/csv_data"}, "csvFileName":{"value":"vib"}, "headerMethod":{"value":"do_not_skip"}, "variableCols":{"value":"false"}, "columnMethod":{"value":"pick_from_file"}, "rowIndexForColumnNames":{"value":"0"}, , "ingestMode":{"value":"burst"}, "sampleRate":{"value":"8000"}, "postProcessMethod":{"value":"rename"},  "suffixName":{"value":".tmp"}}}' |jq
+       res=$(curl -sX POST http://localhost:8081/fledge/service -d  @- << EOF | jq '.'
+       {
+        "name":"My_south",
+        "type":"south",
+        "plugin":"csvplayback",
+        "enabled":false,
+        "config": {
+             "assetName":{"value":"My_csv_asset"},
+             "csvDirName":{"value":"FLEDGE_DATA/csv_data"},
+             "csvFileName":{"value":"vib"},
+             "headerMethod":{"value":"do_not_skip"},
+             "variableCols":{"value":"false"},
+             "columnMethod":{"value":"pick_from_file"},
+             "rowIndexForColumnNames":{"value":"0"},
+             "ingestMode":{"value":"burst"},
+             "sampleRate":{"value":"8000"},
+             "postProcessMethod":{"value":"rename"},
+             "suffixName":{"value":".tmp"}
+                 }
+        }
+        EOF
+        )
 
+        echo $res
 
 Poll Vs Async
 -------------
@@ -183,7 +206,7 @@ Poll Vs Async
 The plugin also works in async mode. Though the default mode is poll.
 The async mode is faster but suffers with memory growth when sample rate is too high for the machine configuration
 
-Use the following sed operation for async and start the plugin again. (for poll the command is mentioned below async)
+Use the following sed operation for async and start the plugin again. (The second sed operation can be used if you want to revert back to poll mode. Restart the plugin in that case also.)
 
 .. code-block:: console
 
@@ -191,8 +214,11 @@ Use the following sed operation for async and start the plugin again. (for poll 
     value='s/POLL_MODE=True/POLL_MODE=False/'
     sudo sed -i $value $plugin_path
 
-    # for poll the value variable will be
-    # value='s/POLL_MODE=False/POLL_MODE=True/'
+    # for reverting back to poll the commands  will be
+    plugin_path=$FLEDGE_ROOT/python/fledge/plugins/south/csvplayback/csvplayback.py
+    value='s/POLL_MODE=False/POLL_MODE=True/'
+    sudo sed -i $value $plugin_path
+
 
 
 Behaviour Under various mode
@@ -223,12 +249,12 @@ The behaviour of plugin under various modes.
 
 
 
-For using poll continuous increase the readingPerSec category to the sample rate.
+For using poll mode in continuous setting increase the readingPerSec category to the sample rate.
 
 .. code-block:: console
 
       sampling_rate=8000
       curl -sX PUT http://localhost:8081/fledge/category/My_southAdvanced -d '{"bufferThreshold":"'"$sampling_rate"'","readingsPerSec":"'"$sampling_rate"'"}' |jq
 
-It is advisable to increase the buffer threshold at least half the sample rate for good performance. (As done in command)
+It is advisable to increase the buffer threshold at least half the sample rate for good performance. (As done in above command)
 
