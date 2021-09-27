@@ -38,7 +38,7 @@ The plugin can also play a file that has variable columns in every line.
 
                 1. skip_rows : If this is selected then the plugin will skip a given number of rows. The number of rows should be given in noOfRows config parameter given below.
 
-                2. pass_in_datapoint : If this is selected then the given no of rows will be combined into a string. This string will be present inside some given datapoint. Useful in cases where we want to ingest meta data along with readings from the csv file.
+                2. pass_in_datapoint : If this is selected then the given number of rows will be combined into a string. This string will be present inside some given datapoint. Useful in cases where we want to ingest meta data along with readings from the csv file.
 
                 3. do_not_skip: This option will not take any action on the header.
 
@@ -50,8 +50,8 @@ The plugin can also play a file that has variable columns in every line.
                 No. of rows to skip or combine to single value. Used when headerMethod is either skip_rows or pass_in_datapoint.
 
   - **'variableCols': type: boolean default: 'false'**:
-                It should be set true when the columns in every row
-                of CSV is variable. For example
+                It should be set true, when the columns in every row
+                of CSV are not fixed. For example
                 If you have a file like this
 
                 a,b,c
@@ -116,7 +116,7 @@ The plugin can also play a file that has variable columns in every line.
 |config2|
 
   - **'rowIndexForColumnNames': type: integer default: '0'**:
-                If column method is pick_from_file then it is the index where
+                If column method is pick_from_file then it is the index
                 from where column names are taken.
 
   - **'ingestMode': type: enumeration default: 'burst'**:
@@ -171,7 +171,7 @@ The plugin can also play a file that has variable columns in every line.
 Execution
 ---------
 
-Assuming you have a csv file named vibration.csv inside FLEDGE_ROOT/data/csv_data. The csv file has fixed number of columns per row.  Also assuming the column names are present in the first line. The plugin will rename the file with suffix .tmp after playing. Here is the curl command for that.
+Assuming you have a csv file named vibration.csv inside FLEDGE_ROOT/data/csv_data (Can give a pattern like vib. The plugin will search for all the files starting with vib and therefore find out the file named vibration.csv). The csv file has fixed number of columns per row.  Also assuming the column names are present in the first line. The plugin will rename the file with suffix .tmp after playing. Here is the curl command for that.
 
     .. code-block:: console
 
@@ -256,5 +256,5 @@ For using poll mode in continuous setting increase the readingPerSec category to
       sampling_rate=8000
       curl -sX PUT http://localhost:8081/fledge/category/My_southAdvanced -d '{"bufferThreshold":"'"$sampling_rate"'","readingsPerSec":"'"$sampling_rate"'"}' |jq
 
-It is advisable to increase the buffer threshold at least half the sample rate for good performance. (As done in above command)
+It is advisable to increase the buffer threshold to atleast half the sample rate for good performance. (As done in above command)
 
