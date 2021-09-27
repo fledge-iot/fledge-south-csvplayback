@@ -66,7 +66,7 @@ The plugin can also play a file that has variable columns in every line.
                     Only one reading will be ingested at a time in this case. If you want to increase the rate then increase
                     readingPerSec parameter in advanced plugin configuration.
 
-   - **'columnMethod': type: enumeration default: 'pick_from_file'**:
+  - **'columnMethod': type: enumeration default: 'pick_from_file'**:
                 If variable Columns is false then it indicates how columns are considered.
 
                 1. pick_from_file : The columns will be picked using a row index given.
@@ -75,7 +75,7 @@ The plugin can also play a file that has variable columns in every line.
 
 
 
-   - **'autoGeneratePrefix': type: string default: 'column'**:
+  - **'autoGeneratePrefix': type: string default: 'column'**:
                If variable Columns is set true then data points will generated using the prefix.
                For example if there is row like this 1,,2 and we chose autoGeneratePrefix to be column, then we will get data points like this column_1: 1, column_3: 2. Empty values will be ignored.
 
@@ -115,7 +115,7 @@ The plugin can also play a file that has variable columns in every line.
 
 |config2|
 
-   - **'rowIndexForColumnNames': type: integer default: '0'**:
+  - **'rowIndexForColumnNames': type: integer default: '0'**:
                 If column method is pick_from_file then it is the index where
                 from where column names are taken.
 
@@ -148,7 +148,7 @@ The plugin can also play a file that has variable columns in every line.
                 It is left to the user to ensure there are no missing values in CSV file. However if the option selected is report. Then plugin will check for NaN's and report error to user. This can serve as a way to check the CSV file for missing values. However the user has to take action on what to do with NaN values. The default action is to ignore them.
                 When error is reported the user must delete the south service and try again with clean CSV file.
 
-   - **'postProcessMethod': type: enumeration default: 'continue_playing'**:
+  - **'postProcessMethod': type: enumeration default: 'continue_playing'**:
                 It is the method to process the CSV file once all rows are ingested.
                 It could be:
 
@@ -165,7 +165,7 @@ The plugin can also play a file that has variable columns in every line.
                    Rename the file with suffix after playing.
 
 
-   - **'suffixName': type: string default: '.tmp'**:
+  - **'suffixName': type: string default: '.tmp'**:
                 The suffix name for renaming the file if postProcess method is rename.
 
 Execution
