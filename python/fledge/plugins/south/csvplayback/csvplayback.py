@@ -101,7 +101,7 @@ _DEFAULT_CONFIG = {
         'description': 'No. of rows to skip or combine to single value.',
         'type': 'integer',
         'default': '1',
-        'displayName': 'Number of rows to skip or pass in datapoint.',
+        'displayName': 'Number of rows to skip or pass in datapoint',
         'validity': "headerMethod == \"skip_rows\" || headerMethod == \"pass_in_datapoint\"",
         'minimum': '1',
         'order': '6'

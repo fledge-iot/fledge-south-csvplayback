@@ -222,7 +222,7 @@ Use the following sed operation for async and start the plugin again. The second
 
 
 
-Behaviour Under various modes
+Behaviour under various modes
 -----------------------------
 
 .. list-table::
