@@ -171,13 +171,13 @@ The plugin can also play a file that has variable columns in every line.
 Execution
 ---------
 
-Assuming you have a csv file named vibration.csv inside FLEDGE_ROOT/data/csv_data (Can give a pattern like vib. The plugin will search for all the files starting with vib and therefore find out the file named vibration.csv). The csv file has fixed number of columns per row.  Also assuming the column names are present in the first line. The plugin will rename the file with suffix .tmp after playing. Here is the curl command for that.
+Assuming you have a csv file named vibration.csv inside FLEDGE_ROOT/data/csv_data (Can give a pattern like vib. The plugin will search for all the files starting with vib and therefore find out the file named vibration.csv). The csv file has fixed number of columns per row.  Also assuming the column names are present in the first line. The plugin will rename the file with suffix .tmp after playing. Here is the cURL command for that.
 
     .. code-block:: console
 
        res=$(curl -sX POST http://localhost:8081/fledge/service -d  @- << EOF | jq '.'
        {
-        "name":"My_south",
+        "name":"csv_player",
         "type":"south",
         "plugin":"csvplayback",
         "enabled":false,
@@ -204,9 +204,10 @@ Poll Vs Async
 -------------
 
 The plugin also works in async mode. Though the default mode is poll.
-The async mode is faster but suffers with memory growth when sample rate is too high for the machine configuration
+The async mode is faster but suffers with memory growth when sample rate is too high for the machine configuration.
 
-Use the following sed operation for async and start the plugin again. (The second sed operation can be used if you want to revert back to poll mode. Restart the plugin in that case also.)
+Use the following sed operation for async and start the plugin again. The second sed operation, in similar way, can be used if you want to revert back to poll mode. Restart for the plugin service is required.
+
 
 .. code-block:: console
 
@@ -221,10 +222,8 @@ Use the following sed operation for async and start the plugin again. (The secon
 
 
 
-Behaviour Under various mode
-----------------------------
-
-The behaviour of plugin under various modes.
+Behaviour Under various modes
+-----------------------------
 
 .. list-table::
    **Behaviour of CSV playback plugin**
@@ -254,7 +253,7 @@ For using poll mode in continuous setting increase the readingPerSec category to
 .. code-block:: console
 
       sampling_rate=8000
-      curl -sX PUT http://localhost:8081/fledge/category/My_southAdvanced -d '{"bufferThreshold":"'"$sampling_rate"'","readingsPerSec":"'"$sampling_rate"'"}' |jq
+      curl -sX PUT http://localhost:8081/fledge/category/csv_playerAdvanced -d '{"bufferThreshold":"'"$sampling_rate"'","readingsPerSec":"'"$sampling_rate"'"}' |jq
 
 It is advisable to increase the buffer threshold to atleast half the sample rate for good performance. (As done in above command)
 
