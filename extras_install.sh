@@ -19,5 +19,5 @@ if [ ${ID} != "mendel" ]; then
     ;;
   esac
 
-  python3 -m pip install pandas==1.0.1
+  python3 -m pip install pandas==1.1.5
 fi
