@@ -101,7 +101,7 @@ _DEFAULT_CONFIG = {
         'description': 'No. of rows to skip or combine to single value.',
         'type': 'integer',
         'default': '1',
-        'displayName': 'Number of rows to skip/pass_in_datapoint.',
+        'displayName': 'Number of rows to skip or pass in datapoint',
         'validity': "headerMethod == \"skip_rows\" || headerMethod == \"pass_in_datapoint\"",
         'minimum': '1',
         'order': '6'
@@ -247,7 +247,7 @@ def plugin_info():
 
     return {
         'name': "CSV Playback",
-        'version': '1.9.1',
+        'version': '1.9.2',
         'mode': plugin_mode,
         'type': 'south',
         'interface': '1.0',
