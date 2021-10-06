@@ -20,10 +20,6 @@ case "$arch" in
 	aarch64)
 	         case "$os" in
 
-                ubuntu)
-                         echo "Package building for ${plugin_name} is not supported for Ubuntu aarch64!!"
-		                 exit 1
-
                  mendel)
                        	 requirements="${requirements},python3-pandas"
                          ;;
