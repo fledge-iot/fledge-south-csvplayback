@@ -18,7 +18,7 @@ if [ ${ID} != "mendel" ]; then
     source scl_source enable rh-python36
     ;;
 
-  *"ubuntu"*)
+  *"Ubuntu"*)
     if [ ${arch} = "aarch64" ]; then
       python3 -m pip install --upgrade pip
     fi
