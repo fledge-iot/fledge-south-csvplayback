@@ -9,6 +9,8 @@ plugin_install_dirname=${plugin_name}
 #   2. Architecture specific packages we depend on
 #   3. Package manager specific packages we depend on
 requirements="fledge"
+os=$(cat /etc/os-release | grep -w ID | cut -f2 -d"=")
+
 
 case "$arch" in
 	x86_64)
@@ -16,7 +18,13 @@ case "$arch" in
 	armv7l)
 		;;
 	aarch64)
-	    requirements="${requirements},python3-pandas"
+	         case "$os" in
+
+                 mendel)
+                       	 requirements="${requirements},python3-pandas"
+                         ;;
+             esac
+
 		;;
 esac
 case "$package_manager" in
