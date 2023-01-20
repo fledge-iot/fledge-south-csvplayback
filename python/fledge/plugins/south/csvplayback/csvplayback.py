@@ -247,7 +247,7 @@ def plugin_info():
 
     return {
         'name': "CSV Playback",
-        'version': '2.1.0',
+        'version': '2.1.1',
         'mode': plugin_mode,
         'type': 'south',
         'interface': '1.0',
